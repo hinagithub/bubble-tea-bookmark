@@ -1,14 +1,14 @@
 [
   {
-    "Title": "Google",
-    "Url": "http://www.google.com"
+    "Title": "GitHub",
+    "Url": "http://github.com"
   },
   {
-    "Title": "Yahoo",
-    "Url": "http://yahoo.com"
+    "Title": "Gmail",
+    "Url": "https://mail.google.com/mail/u/0/#inbox"
   },
   {
-    "Title": "Bing",
-    "Url": "http://bing.com"
+    "Title": "ChatGPT",
+    "Url": "https://chat.openai.com/auth/login"
   }
 ]

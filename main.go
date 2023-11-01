@@ -67,6 +67,7 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 type model struct {
 	list      list.Model
 	favorites []Favorite
+	url       string
 	choice    string
 	quitting  bool
 }
@@ -77,29 +78,30 @@ func (m model) Init() tea.Cmd {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+
 	case tea.WindowSizeMsg:
+		// 起動時にウィンドウサイズを設定
 		m.list.SetWidth(msg.Width)
 		return m, nil
 
 	case tea.KeyMsg:
 		switch keypress := msg.String(); keypress {
+		// キャンセル
 		case "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
 
+		// エンター
 		case "enter":
 			item, ok := m.list.SelectedItem().(item)
+			for _, f := range m.favorites {
+				if f.Title == string(item) {
+					m.url = f.Url
+				}
+			}
 			if ok {
-				if item == "GitHub" {
-					exec.Command("open", "https://ghe.lognote.app/lognote").Start()
-				}
-				if item == "Gmail" {
-					exec.Command("open", "https://mail.google.com/mail/u/0/#inbox").Start()
-				}
-				if item == "ChatGPT" {
-					exec.Command("open", "https://chat.openai.com/auth/login").Start()
-				}
 				m.choice = string(item)
+				exec.Command("open", m.url).Start()
 			}
 			return m, tea.Quit
 		}
@@ -112,7 +114,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) View() string {
 	if m.choice != "" {
-		return quitTextStyle.Render(fmt.Sprintf("%s を選択", m.choice))
+		return quitTextStyle.Render(fmt.Sprintf("%s(%s) を選択", m.choice, m.url))
 	}
 	if m.quitting {
 		return quitTextStyle.Render("キャンセルしました!")
@@ -143,7 +145,10 @@ func main() {
 	l.Styles.PaginationStyle = paginationStyle
 	l.Styles.HelpStyle = helpStyle
 
-	m := model{list: l}
+	m := model{
+		list:      l,
+		favorites: favorites,
+	}
 
 	if _, err := tea.NewProgram(m).Run(); err != nil {
 		fmt.Println("Error running program:", err)

@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
+	input "github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -65,11 +67,13 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 }
 
 type model struct {
-	list      list.Model
-	favorites []Favorite
-	url       string
-	choice    string
-	quitting  bool
+	list       list.Model
+	favorites  []Favorite
+	url        string
+	choice     string
+	quitting   bool
+	mode       string
+	titleInput input.Model
 }
 
 func (m model) Init() tea.Cmd {
@@ -77,6 +81,24 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// 追加モード
+	if m.mode == "add" {
+		return m.UpdateAddItem(msg)
+	}
+
+	// 一覧モード
+	if m.mode == "list" {
+		return m.UpdateList(msg)
+	}
+
+	var cmd tea.Cmd
+	m.list, cmd = m.list.Update(msg)
+	return m, cmd
+}
+
+// 一覧モードUpdate
+func (m model) UpdateList(msg tea.Msg) (tea.Model, tea.Cmd) {
+
 	switch msg := msg.(type) {
 
 	case tea.WindowSizeMsg:
@@ -104,15 +126,49 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				exec.Command("open", m.url).Start()
 			}
 			return m, tea.Quit
+		// 追加モード
+		case "i":
+			m.mode = "add"
+			fmt.Println(m.mode)
+			return m, nil
 		}
 	}
-
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
 	return m, cmd
 }
 
+// 追加モードUpdate
+func (m model) UpdateAddItem(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+q":
+			m.mode = "list"
+			m.titleInput.Reset()
+			return m, nil
+		case "enter":
+			m.favorites = append(m.favorites, Favorite{
+				Title: "test",
+				Url:   m.titleInput.Value(),
+			})
+			m.mode = "list"
+			m.titleInput.Reset()
+			return m, nil
+		}
+	}
+	var cmd tea.Cmd
+	m.titleInput, cmd = m.titleInput.Update(msg)
+	return m, cmd
+}
+
+/*
+一覧モードView
+*/
 func (m model) View() string {
+	if m.mode == "add" {
+		return m.addingTaskView()
+	}
 	if m.choice != "" {
 		return quitTextStyle.Render(fmt.Sprintf("%s(%s) を選択", m.choice, m.url))
 	}
@@ -122,8 +178,14 @@ func (m model) View() string {
 	return "\n" + m.list.View()
 }
 
+// 追加モードView
+func (m model) addingTaskView() string {
+	return fmt.Sprintf("Additional Mode\n\nInput a new task name\n\n " + m.titleInput.View() + "\n\nPress Ctrl+Q to back to normal mode")
+}
+
 func main() {
 
+	// お気に入りリストの読み込み
 	raw, err := ioutil.ReadFile("favorites.json")
 	if err != nil {
 		panic(err)
@@ -136,6 +198,7 @@ func main() {
 		items = append(items, item(f.Title))
 	}
 
+	// 一覧モデルの設定
 	const defaultWidth = 20
 	l := list.New(items, itemDelegate{}, defaultWidth, listHeight)
 	l.Title = "🌷 My Favorite Links"
@@ -145,10 +208,19 @@ func main() {
 	l.Styles.PaginationStyle = paginationStyle
 	l.Styles.HelpStyle = helpStyle
 
+	// テキストインプットモデルの設定
+	ti := textinput.New()
+	ti.Placeholder = "Write New Task Name"
+	ti.Focus()
+	ti.CharLimit = 50
+	ti.Width = 50
+
 	m := model{
-		list:      l,
-		favorites: favorites,
+		list:       l,
+		favorites:  favorites,
+		titleInput: ti,
 	}
+	m.mode = "list"
 
 	if _, err := tea.NewProgram(m).Run(); err != nil {
 		fmt.Println("Error running program:", err)

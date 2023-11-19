@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -17,6 +18,7 @@ import (
 )
 
 const listHeight = 14
+const defaultWidth = 20
 
 var (
 	titleStyle = lipgloss.NewStyle().
@@ -81,8 +83,8 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// 追加モード
-	if m.mode == "add" {
+	// タイトル追加モード
+	if m.mode == "addTitle" {
 		return m.UpdateAddItem(msg)
 	}
 
@@ -128,13 +130,13 @@ func (m model) UpdateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		// 追加モード
 		case "i":
-			m.mode = "add"
-			fmt.Println(m.mode)
+			m.mode = "addTitle"
 			return m, nil
 		}
 	}
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
+
 	return m, cmd
 }
 
@@ -148,14 +150,40 @@ func (m model) UpdateAddItem(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.titleInput.Reset()
 			return m, nil
 		case "enter":
+
+			// 空文字ならリストに戻る
+			if m.titleInput.Value() == "" {
+				m.mode = "list"
+				return m, nil
+			}
+
+			// リストを更新
 			m.favorites = append(m.favorites, Favorite{
-				Title: "test",
-				Url:   m.titleInput.Value(),
+				Title: m.titleInput.Value(),
+				Url:   "URL",
 			})
+			// リストをJSONにエンコード
+			jsonData, err := json.MarshalIndent(m.favorites, "", "    ")
+			if err != nil {
+				log.Fatal(err)
+			}
+			// ファイルに書き込む
+			err = ioutil.WriteFile("favorites.json", jsonData, os.ModePerm)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			// list.Add的な項目追加の関数はないためNewで再生成
+			var items []list.Item
+			for _, f := range m.favorites {
+				items = append(items, item(f.Title))
+			}
+			m.list = list.New(items, itemDelegate{}, defaultWidth, listHeight)
 			m.mode = "list"
 			m.titleInput.Reset()
 			return m, nil
 		}
+
 	}
 	var cmd tea.Cmd
 	m.titleInput, cmd = m.titleInput.Update(msg)
@@ -166,14 +194,14 @@ func (m model) UpdateAddItem(msg tea.Msg) (tea.Model, tea.Cmd) {
 一覧モードView
 */
 func (m model) View() string {
-	if m.mode == "add" {
+	if m.mode == "addTitle" {
 		return m.addingTaskView()
 	}
 	if m.choice != "" {
 		return quitTextStyle.Render(fmt.Sprintf("%s(%s) を選択", m.choice, m.url))
 	}
 	if m.quitting {
-		return quitTextStyle.Render("キャンセルしました!")
+		return quitTextStyle.Render(fmt.Sprintf("キャンセルしました! %v", m.favorites))
 	}
 	return "\n" + m.list.View()
 }
@@ -199,7 +227,6 @@ func main() {
 	}
 
 	// 一覧モデルの設定
-	const defaultWidth = 20
 	l := list.New(items, itemDelegate{}, defaultWidth, listHeight)
 	l.Title = "🌷 My Favorite Links"
 	l.SetShowStatusBar(false)

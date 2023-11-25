@@ -234,64 +234,12 @@ func (m model) UpdateInputs(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		}
 	}
-
-	// Handle character input and blinking
 	cmd := m.updateInputs(msg)
-
 	return m, cmd
-	// switch msg := msg.(type) {
-	// case tea.KeyMsg:
-	// 	switch msg.String() {
-	// 	case "ctrl+q":
-	// 		m.mode = "list"
-	// 		m.inputs[0].Reset()
-	// 		return m, nil
-	// 	case "enter":
-
-	// 		// 空文字ならリストに戻る
-	// 		if m.inputs[0].Value() == "" {
-	// 			m.mode = "list"
-	// 			return m, nil
-	// 		}
-
-	// 		// リストを更新
-	// 		m.favorites = append(m.favorites, Favorite{
-	// 			Title: m.inputs[0].Value(),
-	// 			Url:   "URL",
-	// 		})
-	// 		// リストをJSONにエンコード
-	// 		jsonData, err := json.MarshalIndent(m.favorites, "", "    ")
-	// 		if err != nil {
-	// 			log.Fatal(err)
-	// 		}
-	// 		// ファイルに書き込む
-	// 		err = ioutil.WriteFile("favorites.json", jsonData, os.ModePerm)
-	// 		if err != nil {
-	// 			log.Fatal(err)
-	// 		}
-
-	// 		// list.Add的な項目追加の関数はないためNewで再生成
-	// 		var items []list.Item
-	// 		for _, f := range m.favorites {
-	// 			items = append(items, item(f.Title))
-	// 		}
-	// 		m.list = list.New(items, itemDelegate{}, defaultWidth, listHeight)
-	// 		m.mode = "list"
-	// 		m.inputs[0].Reset()
-	// 		return m, nil
-	// 	}
-
-	// }
-	// var cmd tea.Cmd
-	// // m.inputs, cmd = m.inputs[0].Update(msg)
-	// return m, cmd
 }
 
 func (m *model) updateInputs(msg tea.Msg) tea.Cmd {
 	cmds := make([]tea.Cmd, len(m.inputs))
-
-	// Only text inputs with Focus() set will respond, so it's safe to simply
-	// update all of them here without any further logic.
 	for i := range m.inputs {
 		m.inputs[i], cmds[i] = m.inputs[i].Update(msg)
 	}
@@ -346,9 +294,8 @@ func (m model) addingTaskView() string {
 	return b.String()
 }
 
-func main() {
-
-	// お気に入りリストの読み込み
+// お気に入りリストを項目のアイテムとして読み込み
+func GetItems() ([]Favorite, []list.Item) {
 	raw, err := ioutil.ReadFile("favorites.json")
 	if err != nil {
 		panic(err)
@@ -360,7 +307,12 @@ func main() {
 	for _, f := range favorites {
 		items = append(items, item(f.Title))
 	}
+	return favorites, items
 
+}
+
+// listの初期化
+func InitList(items []list.Item) list.Model {
 	// 一覧モデルの設定
 	l := list.New(items, itemDelegate{}, defaultWidth, listHeight)
 	l.Title = "🌷 My Favorite Links"
@@ -369,8 +321,11 @@ func main() {
 	l.Styles.Title = titleStyle
 	l.Styles.PaginationStyle = paginationStyle
 	l.Styles.HelpStyle = helpStyle
+	return l
+}
 
-	// テキストインプットモデルの設定
+// textinputsの初期化
+func InitInput() []input.Model {
 	inputs := make([]input.Model, 2)
 
 	for i := range inputs {
@@ -391,10 +346,17 @@ func main() {
 		}
 		inputs[i] = t
 	}
+	return inputs
+}
 
+func main() {
+
+	favorites, items := GetItems()
+	list := InitList(items)
+	inputs := InitInput()
 	m := model{
-		list:      l,
 		favorites: favorites,
+		list:      list,
 		inputs:    inputs,
 	}
 	m.mode = "list"
